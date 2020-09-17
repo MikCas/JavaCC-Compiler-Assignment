@@ -1,0 +1,495 @@
+options{STATIC = false ;}
+
+PARSER_BEGIN(Assignment)
+
+import java.util.ArrayList;
+import java.io.InputStream;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+
+public class Assignment{
+
+  public static void main(String args []) throws ParseException, TokenMgrError {
+
+    try{
+      // Create a parser and feed it the standard input
+      Assignment parser = new Assignment(System.in);
+      //Parse the program to check if syntax is correct
+      //If not correct then program will stop during parse and display corresponding error
+      parser.Program();
+      //After a succesful parse output PASS
+      System.out.println("PASS");
+      //If the program evaluates to a number then output the value otherwise output DIVERGENCE
+
+      //Parse the statement again starting from MAIN, while this time evaluating an expression
+      //Obtaining the MAIN body from the array list created
+      //THis is done so as to obtain the string defined in Main since Main is the beginnning of the program
+      for(Definition def:definitions){
+        if(def.getFuncDef() == "MAIN"){
+
+          //postParse is set to true now so as to be able to obtain the value of the expression
+          postParse = true;
+
+          //Create another parser which takes the string of the main obtained as input
+          Assignment parser2 = new Assignment (new java.io.StringReader(def.body));
+
+          //Obtain a string in the form a mathematical expression after second parse
+          //this string will be parsed again and evaluated
+          expressionString = parser2.Expr() ;
+
+          //System.out.println(expressionString);
+          break;
+        }
+      }
+
+      //The epxression string will output a value however this program is not able to detect DIVERGENCE
+      //This can be achieved by parsing the string again between the second and fourth string
+      //Check if the string contains any non-expression characters since recursive programs contain function names in the string expression obtained after the second ParseException
+      //Due to there being a strig character in the input, the parser will output "[PARSING EXCEPTION] Invalid Input" since the input is invalid
+      //parse the string obtained to see if it contains any characters which are not <NUM> <LEFTPAR> <RIGHTPAR> <PLUS> <MINUS>
+      //If so then output DIVERGENCE otherwise continue
+      //Pass will still be outputted since the first parse succeeds
+
+      //Otherwise parse the expression string normally
+      Assignment parser3 = new Assignment (new java.io.StringReader(expressionString));
+      System.out.println(parser3.ExprVal());
+    }
+
+    catch(TokenMgrError e) {
+            System.err.println("[LEXING ERROR] Invalid character");
+            System.exit(0);
+        }
+     catch(ParseException e) {
+            System.err.println("[PARSING EXCEPTION] Invalid Input");
+            System.exit(0);
+        }
+   }
+
+   //Function which determines if the array list contains the given function definition
+   public static boolean ifContains (ArrayList<Definition> defs, String str){
+     boolean bool = false;
+
+     //Loop through the array list and if the current element matches the input string then return true
+     for (Definition def : defs) {
+       if (def.getFuncDef().equals(str)){
+          return true;
+       }
+     }
+     //else return false
+     return false;
+   }
+
+   //The array list will contain Definition objects
+   public static ArrayList<Definition> definitions = new ArrayList<Definition>();
+   //Used to hold the current line
+   public static int lineCounter = 1;
+   //Value of program
+   public static int value = 0;
+   //check used after parse so as to be able to simplify expression
+   public static boolean postParse = false;
+   //holds the string obtained after pasing the expression
+   public static String expressionString = "";
+
+}
+
+PARSER_END(Assignment)
+
+TOKEN: { <EOL: "\t" | "\n" | "\r" | "\r\n"> }
+TOKEN: { <DEF: "DEF"> | <MAIN: "MAIN"> | <LEFTPAR: "("> | <RIGHTPAR: ")"> | <LEFTBRACE: "{"> | <RIGHTBRACE: "}"> | <SEMICOLON: ";"> | <LEFTSQUARE: "["> | <RIGHTSQUARE: "]"> | <SPACE: " "> | <PLUS: "+"> | <MULT: "*"> | <NUM: (["0"-"9"])+> | <FUNC_ID: (["A"-"Z"])+> | <PARAM_ID: (["a"-"z"])+>}
+//TOKEN: { <EXPRSTR : (<NUM>|<LEFTPAR>) (<NUM>|<LEFTPAR>|<RIGHTPAR>|<PLUS>|<MULT>)*>}
+//Recognises a list of Definitions and ends with EOF
+//Program -> (<DEF> " " Header " " ';'<EOL>)+ <EOF>
+void Program():
+{}
+{ //Starts a new Definition
+  (
+  try{<DEF>}
+  catch(ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("Expected 'DEF' Keyword");
+    System.exit(0);
+  }
+
+  //Expecting a white space
+  try{<SPACE>}
+  catch (ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("Expected ' ' character");
+    System.exit(0);
+  }
+
+  Header()
+
+  //Expecting a white space
+  try{<SPACE>}
+  catch (ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("Expected ' ' character");
+    System.exit(0);
+  }
+
+  try{<SEMICOLON>}
+  catch(ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("Expected ';' Character");
+    System.exit(0);
+  }
+
+  //A new line per defition
+  try{<EOL>}
+  catch (ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("Expected EOL Character");
+    System.exit(0);
+  }
+
+
+  { //After EOL character, increment the lineCounter variable
+    lineCounter++;
+  }
+
+   //+ used here since the program has to have at least one Definition line
+   //Keep on repeating Definition indefinitely
+  )+
+
+  //Used to check if MAIN is defined in any of the functions
+  //If not there is an error since MAIN has to be defined
+  {
+    //If the list containing the names of all the functions does not contain MAIN, output error with lineCounter 0
+    if(!ifContains(definitions, "MAIN")){
+      lineCounter = 0;
+      System.err.println(lineCounter);
+      System.err.println("MAIN is not defined");
+      System.exit(0);
+    }
+  }
+
+  //Program ends after parsing all the Definitions
+  <EOF>
+}
+
+//Header -> (<MAIN> | <FUNC_ID> " " <PARAM_ID>) " " Body
+void Header():
+{
+  Token param;
+  //New definition is created everytime after <DEF> has been parsed
+  Definition def = new Definition();
+}
+{
+  //If the current token matches neither MAIN not <FUNC_ID> then error
+  try{
+    (
+
+    <MAIN>
+
+    { //Check if MAIN is already defined in the program
+      if(ifContains(definitions, "MAIN")){
+        System.err.println(lineCounter);
+        System.err.println("'MAIN' is defined more than once");
+        System.exit(0);
+      }
+
+      //If not, then add the MAIN function name to the Definitions array list
+      else{
+       def.funcDef = "MAIN";
+       //No need to set the parameter of MAIN since MAIN has no parameters
+       definitions.add(def);
+      }
+    }
+
+   |
+
+    funcID()
+
+    //Expecting a white space
+    try{<SPACE>}
+    catch (ParseException e){
+      System.err.println(lineCounter);
+      System.err.println("Expected ' ' character");
+      System.exit(0);
+    }
+
+    try{
+       param = <PARAM_ID>
+       //Obtain the last added element added to the array list and set the parameter
+       //This is valid since only new element can be added to the array list otherwise this will result in an error
+       {
+         definitions.get(definitions.size() - 1).parameter = param.toString();}
+       }
+    catch(ParseException e){
+      System.err.println(lineCounter);
+      System.err.println("Invalid Parameter Name");
+      System.exit(0);
+    }
+    )
+  }
+
+  catch(ParseException e){
+
+    //Check if the token input DEF then output that def is a keyword
+    System.err.println(lineCounter);
+    System.err.println("Invalid Function Name");
+    System.exit(0);
+  }
+
+
+  //Expecting a white space
+  try{<SPACE>}
+  catch (ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("Expected ' ' character");
+    System.exit(0);
+  }
+
+  Body()
+}
+
+//funcID -> <FUNC_ID>
+void funcID():
+{
+  Token funcName;
+  Definition def = new Definition();
+}
+
+{
+  try{
+
+    //Obtain the name of the function
+    funcName = <FUNC_ID>
+
+    //If DEF is inputted instead of another function the token <DEF> will be read which will output an invalid function name error
+
+    //Checking if a function which is not MAIN exists in the list already
+    {
+      if(ifContains(definitions, funcName.toString())){
+        System.err.println(lineCounter);
+        System.err.println("Function " + funcName.toString() + " is defined more than once");
+        System.exit(0);
+      }
+      else{
+        //Set the name of the function and add it to the arrya list
+        def.funcDef = funcName.toString();
+        definitions.add(def);
+      }
+    }
+  }
+  catch(ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("[PARSE ERROR] Invalid Function Name");
+    System.exit(0);
+  }
+}
+
+//Body -> <LEFTBRACE> " " Expr " " <RIGHTBRACE>
+void Body() throws ParseException:
+{String body;}
+{
+  //Expecting a left brace
+  try {<LEFTBRACE>}
+  catch (ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("Expected '{' character");
+    System.exit(0);
+  }
+
+  //Expecting a white space
+  try{<SPACE>}
+  catch (ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("Expected ' ' character");
+    System.exit(0);
+  }
+
+  //Obtaining the String value of the expression
+  //value = Expression;
+  body = Expr()
+
+  //A similar procedure which was carried out for the parameters is done for the body string
+  //Placing the string value of the expression into the body attribute of the last defintion in the defintions array list
+  {definitions.get(definitions.size() - 1).body = body.toString();}
+
+  //Expecting a white space
+  try{<SPACE>}
+  catch (ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("Expected ' ' character");
+    System.exit(0);
+  }
+
+  //Expecting a right brace
+  try{<RIGHTBRACE>}
+  catch(ParseException e){
+    System.err.println(lineCounter);
+    System.err.println("[PARSE ERROR] Expected '{' character");
+    System.exit(0);
+  }
+}
+
+//Expr -> Term (<PLUS> Term)*
+String Expr() throws ParseException:
+{
+  String term1, term2;
+  //initialising term2 as it may be null
+  term2 = null;
+}
+{ //Obtain string values for term1 and term2 while parsing the expression
+  term1 = Term()
+  (
+  <PLUS>
+  term2 = Term()
+  )*
+  //Return the concatenation of the string term1 plus term2
+  {
+    //If term 2 is empty we can just print out term1
+    if(term2 == null){
+        return term1;
+    }
+    else{
+      //After parsing for the firs time, start adding paranthesis to formt he expression
+      if(postParse){
+        //return term1 + "+" + "(" + term2 + ")";
+        return term1 + "+" + term2;
+      }
+      else{
+      return term1 + "+" + term2 ;
+    }
+    }
+  }
+}
+
+//Term -> Primary (<MULT> Primary)*
+String Term() throws ParseException:
+{
+  String primary1, primary2;
+  //initialising primary2 as it may be null
+  primary2 = null;
+}
+{ //Obtain string value for primary1 and primary2 while parsing the term
+  primary1 = Primary()
+  (
+  <MULT>
+
+  primary2 = Primary()
+
+  )*
+  //Return the concatenation of the string term1 plus term2
+  {
+    //Same reasoning as used in expression
+    if(primary2 == null){
+      return primary1;
+    }
+    else{
+      //After parsing for the firs time, start adding paranthesis to formt he expression
+      if(postParse){
+        //return primary1 + "*" + "(" + primary2 + ")";
+        return primary1 + "*" + primary2;
+      }
+      else{
+      return primary1 + "*" + primary2 ;
+    }
+    }
+  }
+}
+
+//Primary -> <NUM> | <PARAMID> | <FUNC_ID> <LEFTPAR> Expr <RIGHTPAR>
+String Primary() throws ParseException:
+{Token primary;
+ String expr;}
+{
+  primary  = <NUM>
+  {
+    //Return the number string
+    return primary.toString();
+  }
+
+  |
+
+  primary = <PARAM_ID>
+  {
+    //return the parameter string
+    return primary.toString();
+  }
+
+  |
+
+  primary  = <FUNC_ID>
+
+  <LEFTPAR>
+  expr = Expr()
+  <RIGHTPAR>
+
+  {
+    //If the first parse is passed then create the string expression here
+    if(postParse){
+
+      //obtain the body of the corresponding function
+      for(Definition def:definitions){
+
+        //return the body of the corresponding function where the parameter is replaced with the value of the expr
+        //Paranthesis added to both the function and the expression so as to be able to evaluate expressions correctly
+        if(def.funcDef.equals(primary.toString())){
+            return ("(" + def.body.replaceAll(def.parameter, "(" + expr.toString() + ")") + ")") ;
+          }
+        }
+      }
+      else{
+      return primary.toString() + "(" + expr + ")";
+    }
+  }
+}
+
+//The -Val methods are used to obtain the value of the expression string obtained int he second parse
+//SO this is the third parse
+//Expr -> (Term <PLUS> Term)*
+int ExprVal():
+{  int term1, term2;
+  //initaialsiing term2 as it may be null
+  term2 = 0;}
+{
+  //Obtain string values for term1 and term2 while parsing the expression
+  term1 = TermVal()
+
+  (
+  <PLUS>
+  term2 = TermVal()
+  )*
+  //Add the terms
+  //If term2 is not parsed then 0 will be added to 1, which won't make a difference to the result
+  {return term1 + term2;}}
+
+//Term -> (Primary <MULT> Primary)*
+int TermVal():
+{
+  int primary1, primary2;
+  //initialising primary2 as it may be null
+  primary2 = 1;
+}
+{ //Obtain string value for primary1 and primary2 while parsing the term
+   primary1 = PrimaryVal()
+  (
+  <MULT>
+  primary2 = PrimaryVal()
+  )*
+  //Multiply the primaries
+  //If primary2 is not parsed then 1 is multiplied by the value of term1 which will remain 1
+  //So even if primary2 is nothing then we will obtain a correct value
+  {return primary1 * primary2;}
+}
+
+//PrimaryVal -> <NUM> | <PARAMID>
+int PrimaryVal():
+{Token primary;
+ int expr;}
+{
+  //The expression string should only contain numbers here so only parse <NUM>
+  primary  = <NUM>
+  {return Integer.parseInt(primary.toString());}
+
+  |
+
+  <LEFTPAR> expr =  ExprVal() <RIGHTPAR>
+  {return expr;}
+}
